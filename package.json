@@ -8,6 +8,7 @@
     "repro:stock": "node --expose-gc measure-extended-config-cache.mjs stock",
     "repro:cached": "node --expose-gc measure-extended-config-cache.mjs cached",
     "repro:lru": "node measure-lru-capacity.mjs",
+    "repro:lru-cost": "node measure-lru-cost.mjs",
     "parity": "node parity.mjs"
   },
   "devDependencies": {

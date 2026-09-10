@@ -32,7 +32,13 @@ const files = generate({ root, packages, groupSize, pathEntries }).flat()
 
 let parseCalls = 0
 let readConfigCalls = 0
-const distinctPaths = new Set()
+// A plain Set here would be a strong reference to every expanded `paths` object, so
+// `retainedHeapMb` below would be measuring the instrument rather than the package: in
+// the stock arm the cache retains at most one entry per package, and the thousands of
+// other expanded maps are garbage that a Set would keep alive. A WeakSet counts the same
+// distinct objects and holds none of them.
+const seenPaths = new WeakSet()
+let distinctPathsCount = 0
 const extendedConfigCache = new Map()
 
 const tsProxy = new Proxy(ts, {
@@ -54,7 +60,11 @@ const tsProxy = new Proxy(ts, {
                 extendedConfigCache,
               )
             : target.parseJsonConfigFileContent(...args)
-        if (result?.options?.paths) distinctPaths.add(result.options.paths)
+        const expandedPaths = result?.options?.paths
+        if (expandedPaths && !seenPaths.has(expandedPaths)) {
+          seenPaths.add(expandedPaths)
+          distinctPathsCount += 1
+        }
         return result
       }
     }
@@ -110,7 +120,7 @@ console.log(
       componentsCompiled: compiled,
       parseJsonConfigFileContentCalls: parseCalls,
       readConfigFileCalls: readConfigCalls,
-      distinctExpandedPathsObjects: distinctPaths.size,
+      distinctExpandedPathsObjects: distinctPathsCount,
       seconds: Math.round(elapsed / 100) / 10,
       // Retained heap after a forced GC -- what is still reachable, not garbage. This is
       // the figure to compare. `rss` is reported for context only: on macOS it can read

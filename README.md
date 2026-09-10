@@ -104,13 +104,74 @@ holds one component per round, so the same key is asked for repeatedly while the
 `fileToScopeCache` and `fileToGlobalScopeCache`, three lines below, are also `createCache()` and
 so carry the same 500-entry cap. They are not measured here.
 
+### What the thrash costs, and how much of that is defect 1
+
+The table above counts parses and stops there, which overstates defect 2 on its own: a parse is
+expensive largely *because* of defect 1. So the two have to be measured together before the cap
+can be judged.
+
+`node measure-lru-cost.mjs 400 600` runs four cells — a working set under the cap and one 20 %
+over it, each in the stock arm and in the arm that supplies `extendedConfigCache` through
+`registerTS` (what defect 1's fix does, nothing else changed). 5 rounds, 2 packages per reference
+group, 800 padding aliases in the shared base plus one per package:
+
+| nearest configs walked | arm | parses per round | seconds per round | distinct expanded `paths` | retained heap |
+|---|---|---|---|---|---|
+| 400 | stock | 800 / 0 / 0 / 0 / 0 | 2.5 / 0.2 / 0.1 / 0.1 / 0.1 | 800 | 289.8 MB |
+| 400 | cached | 800 / 0 / 0 / 0 / 0 | 0.9 / 0.1 / 0.1 / 0.1 / 0.1 | **1** | **14.1 MB** |
+| 600 | stock | 1200 × 5 | 3.9 / 3.7 / 3.0 / 3.1 / 3.4 | 6000 | 358.5 MB |
+| 600 | cached | 1200 × 5 | 1.5 / 1.2 / 0.9 / 0.5 / 0.5 | **1** | **13.5 MB** |
+
+**All four cells run on the same 600-package workspace**; only how much of it a round walks
+changes. Generating a smaller workspace for the under-cap cell would give it a different base and
+a different alias count, and the heap column could then not be read across the cap boundary at
+all — which is the one comparison this table exists to make.
+
+The parse counts are identical between the arms in every cell: the cache shape is untouched and
+the LRU still thrashes exactly as before. Only the price of a miss changes.
+
+Two readings:
+
+- **The memory cliff is defect 1, not the cap.** In the cached arm, retained heap is flat across
+  the cap boundary — 14.1 MB for a working set that fits against 13.5 MB for one 20 % over it.
+  In the stock arm the same crossing costs 289.8 → 358.5 MB. Once the `extends` chain is shared,
+  eviction stops being visible in memory.
+- **A residual CPU cost remains and is much smaller than the parse counts suggest.** In the
+  steady state a round over the cap costs well under a second in the cached arm against 0.1 s
+  under the cap, where the stock arm pays around three seconds against the same 0.1 s.
+
+Which is to say: fixing defect 1 turns defect 2 from a cliff into the gradient a cache is
+supposed to degrade along. Whether the remaining gradient justifies touching the cap is the
+maintainers' call, and it is a much smaller question than the parse table alone implies.
+
+The table above is one run on a laptop, and the seconds column is the part that moves. Over three
+repetitions the steady-state round over the cap measured 2.9–4.7 s stock and 0.5–1.0 s cached,
+while the under-cap rounds stayed at 0.1 s in both arms. Parse counts were identical every time
+and retained heap reproduced to within 3 MB, so those two columns can be read as exact and the
+timings only as an order of magnitude.
+
+#### The instrument has to not retain what it counts
+
+`distinctExpandedPathsObjects` was a plain `Set` of the expanded `paths` objects, which is a
+strong reference to every one of them — so in the cell where the LRU *evicts*, the retained-heap
+figure was measuring the measurement. Corrected to a `WeakSet` plus a counter, the 600/stock cell
+reads 358.5 MB rather than 2089.2 MB.
+
+The cells where nothing is evicted are unaffected, and so is defect 1's table above: there the
+cache legitimately holds every config the traversal produced (150 keys × ~19 referenced configs),
+so the `Set` was retaining nothing that was not already reachable. Re-measured with the `WeakSet`
+instrument, that table reproduces to within 0.1 MB — 1346.9 MB stock, 30.2 MB cached.
+`measure-lru-capacity.mjs` never reported heap and never held such a `Set`, so its table stands
+as published.
+
 ## Run it
 
 ```sh
 npm install
 npm run repro        # defect 1, both arms
-npm run repro:lru    # defect 2, the capacity table
-npm run parity       # defect 1, result parity
+npm run repro:lru      # defect 2, the capacity table
+npm run repro:lru-cost # what the thrash costs, with and without defect 1's fix
+npm run parity         # defect 1, result parity
 ```
 
 Scale with `PACKAGES`, `GROUP_SIZE`, `PATH_ENTRIES`:
