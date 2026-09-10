@@ -119,7 +119,7 @@ Scale with `PACKAGES`, `GROUP_SIZE`, `PATH_ENTRIES`:
 PACKAGES=300 GROUP_SIZE=30 node --expose-gc measure-extended-config-cache.mjs stock
 ```
 
-At 300 packages the stock arm runs out of heap on a default node configuration; that is the
+At 300 packages the stock arm ran out of heap here on the default node heap limit; that is the
 effect, not a broken fixture.
 
 ## Why a generated workspace, and what makes it valid
