@@ -1,0 +1,17 @@
+{
+  "name": "vue-compiler-sfc-tsconfig-repro",
+  "private": true,
+  "type": "module",
+  "description": "Reproduction: @vue/compiler-sfc re-parses the whole tsconfig extends chain per config, and its tsconfig LRU holds 500 entries",
+  "scripts": {
+    "repro": "npm run repro:stock && npm run repro:cached",
+    "repro:stock": "node --expose-gc measure-extended-config-cache.mjs stock",
+    "repro:cached": "node --expose-gc measure-extended-config-cache.mjs cached",
+    "repro:lru": "node measure-lru-capacity.mjs",
+    "parity": "node parity.mjs"
+  },
+  "devDependencies": {
+    "@vue/compiler-sfc": "3.5.41",
+    "typescript": "^5.9.0"
+  }
+}
