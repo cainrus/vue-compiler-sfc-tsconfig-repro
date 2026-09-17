@@ -1,5 +1,10 @@
 # `@vue/compiler-sfc` re-parses the whole tsconfig `extends` chain for every config it walks
 
+> **Status: fixed upstream.** Defect 1 below is merged as
+> [`vuejs/core#15480`](https://github.com/vuejs/core/pull/15480), closing
+> [vuejs/core#15478](https://github.com/vuejs/core/issues/15478). This repository stays as the
+> reproduction and measurement evidence behind that fix.
+
 Two independent problems in `resolveType.ts`, in one workspace generator because they share a
 fixture. They are separate reports: the first is a one-argument fix, the second is a capacity
 question whose answer belongs to the maintainers.
